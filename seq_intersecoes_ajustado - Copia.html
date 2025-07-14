@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interseções Triplas e Duplas - Números Figurados</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<style>
+  .expoente { color: #0d6efd; font-size:0.8em; vertical-align: super; font-weight: normal;}
+  .number-item { font-weight: bold; margin-right: 6px; }
+  .section-title { margin-top: 1rem; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="container mt-4">
+  <h2 class="mb-4">Interseções entre Números Figurados</h2>
+  <form id="form" class="mb-3 row g-2 align-items-center">
+    <div class="col-auto">
+      <label for="limitInput" class="col-form-label">Limite superior (até 2 bilhões):</label>
+    </div>
+    <div class="col-auto">
+      <input type="number" id="limitInput" class="form-control" value="1000000" min="1" max="2000000000" required />
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary">Gerar Interseções</button>
+    </div>
+  </form>
+
+  <div class="mb-3">
+    <button class="btn btn-success me-2" id="downloadTxt" disabled>Baixar Números (.TXT)</button>
+    <button class="btn btn-danger" id="downloadPdf" disabled>Baixar Tabela (.PDF)</button>
+  </div>
+
+  <div id="output"></div>
+  <div id="outputTriple" style="margin-top:2rem;"></div>
+</div>
+
+<script>
+  // Funções para números figurados
+  function triangular(n) { return n * (n + 1) / 2; }
+  function quadrangular(n) { return n * n; }
+  function pentagonal(n) { return n * (3 * n - 1) / 2; }
+  function hexagonal(n) { return n * (2 * n - 1); }
+
+  function generateSequence(fn, limit) {
+    const seq = [];
+    let n = 1;
+    while (true) {
+      const val = fn(n);
+      if (val > limit) break;
+      seq.push({ num: val, pos: n });
+      n++;
+    }
+    return seq;
+  }
+
+  function createMap(seq) {
+    const map = new Map();
+    seq.forEach(({num, pos}) => map.set(num, pos));
+    return map;
+  }
+
+  function findDoubleIntersections(sequences) {
+    const results = [];
+    const keys = Object.keys(sequences);
+    for (let i = 0; i < keys.length; i++) {
+      for (let j = i + 1; j < keys.length; j++) {
+        const seqA = sequences[keys[i]];
+        const seqB = sequences[keys[j]];
+        const setB = new Set(seqB.map(x => x.num));
+        const intersection = seqA.filter(x => setB.has(x.num));
+        if (intersection.length > 0) {
+          results.push({
+            pair: [keys[i], keys[j]],
+            numbers: intersection
+          });
+        }
+      }
+    }
+    return results;
+  }
+
+  function findTripleIntersections(sequences) {
+    const results = [];
+    const keys = Object.keys(sequences);
+    for (let i = 0; i < keys.length; i++) {
+      for (let j = i + 1; j < keys.length; j++) {
+        for (let k = j + 1; k < keys.length; k++) {
+          const seqA = sequences[keys[i]];
+          const seqB = sequences[keys[j]];
+          const seqC = sequences[keys[k]];
+          const setB = new Set(seqB.map(x => x.num));
+          const setC = new Set(seqC.map(x => x.num));
+          const intersection = seqA.filter(x => setB.has(x.num) && setC.has(x.num));
+          if (intersection.length > 0) {
+            results.push({
+              triple: [keys[i], keys[j], keys[k]],
+              numbers: intersection
+            });
+          }
+        }
+      }
+    }
+    return results;
+  }
+
+  function displayDoubleIntersections(results, maps) {
+    if (results.length === 0) return "<p>Nenhuma interseção dupla encontrada.</p>";
+    let html = '<div class="section-title">Interseções Duplas</div><div class="table-responsive"><table class="table table-bordered"><thead><tr><th>Combinação</th><th>Qtd.</th><th>Números</th></tr></thead><tbody>';
+    results.forEach(({pair, numbers}) => {
+      html += `<tr><td>${pair[0]} ∩ ${pair[1]}</td><td>${numbers.length}</td><td>`;
+      numbers.forEach(({num}) => {
+        const posA = maps[pair[0]].get(num);
+        const posB = maps[pair[1]].get(num);
+        html += `<span class="number-item">${num}<sup class="expoente">(${pair[0]}:${posA},${pair[1]}:${posB})</sup></span>, `;
+      });
+      html = html.replace(/, $/, '');
+      html += '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function displayTripleIntersections(results, maps) {
+    if (results.length === 0) return "<p>Nenhuma interseção tripla encontrada.</p>";
+    let html = '<div class="section-title">Interseções Triplas</div><div class="table-responsive"><table class="table table-bordered"><thead><tr><th>Combinação</th><th>Qtd.</th><th>Números</th></tr></thead><tbody>';
+    results.forEach(({triple, numbers}) => {
+      html += `<tr><td>${triple[0]} ∩ ${triple[1]} ∩ ${triple[2]}</td><td>${numbers.length}</td><td>`;
+      numbers.forEach(({num}) => {
+        const posA = maps[triple[0]].get(num);
+        const posB = maps[triple[1]].get(num);
+        const posC = maps[triple[2]].get(num);
+        html += `<span class="number-item">${num}<sup class="expoente">(${triple[0]}:${posA},${triple[1]}:${posB},${triple[2]}:${posC})</sup></span>, `;
+      });
+      html = html.replace(/, $/, '');
+      html += '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  let lastNumbers = []; // Para TXT
+  let lastTableData = []; // Para PDF
+
+  document.getElementById('form').addEventListener('submit', e => {
+    e.preventDefault();
+    const limitInput = document.getElementById('limitInput');
+    let limit = Number(limitInput.value);
+    if (isNaN(limit) || limit < 1) {
+      alert('Por favor, insira um limite válido maior que zero.');
+      return;
+    }
+    if (limit > 2000000000) {
+      alert('Limite máximo permitido é 2.000.000.000. Ajustando para este valor.');
+      limit = 2000000000;
+      limitInput.value = limit;
+    }
+
+    const sequences = {
+      T: generateSequence(triangular, limit),
+      Q: generateSequence(quadrangular, limit),
+      P: generateSequence(pentagonal, limit),
+      H: generateSequence(hexagonal, limit),
+    };
+
+    const maps = {};
+    for (const key in sequences) {
+      maps[key] = createMap(sequences[key]);
+    }
+
+    const doubleIntersections = findDoubleIntersections(sequences);
+    const tripleIntersections = findTripleIntersections(sequences);
+
+    document.getElementById('output').innerHTML = displayDoubleIntersections(doubleIntersections, maps) + displayTripleIntersections(tripleIntersections, maps);
+
+    // Preparar dados para download
+    lastNumbers = [];
+    lastTableData = [];
+
+    // Coletar números únicos para TXT (sem posições)
+    const uniqueNums = new Set();
+    // Coletar dados para tabela PDF
+    function addToData(pairOrTriple, numbers, isTriple = false) {
+      numbers.forEach(({num}) => {
+        uniqueNums.add(num);
+        if (isTriple) {
+          const pos = pairOrTriple.map(seq => maps[seq].get(num));
+          lastTableData.push([
+            pairOrTriple.join(' ∩ '),
+            num,
+            pos.map((p,i) => `${pairOrTriple[i]}:${p}`).join(', ')
+          ]);
+        } else {
+          const posA = maps[pairOrTriple[0]].get(num);
+          const posB = maps[pairOrTriple[1]].get(num);
+          lastTableData.push([
+            pairOrTriple.join(' ∩ '),
+            num,
+            `${pairOrTriple[0]}:${posA}, ${pairOrTriple[1]}:${posB}`
+          ]);
+        }
+      });
+    }
+
+    doubleIntersections.forEach(({pair, numbers}) => addToData(pair, numbers, false));
+    tripleIntersections.forEach(({triple, numbers}) => addToData(triple, numbers, true));
+
+    lastNumbers = Array.from(uniqueNums).sort((a,b) => a-b);
+
+    // Ativar botões download
+    document.getElementById('downloadTxt').disabled = false;
+    document.getElementById('downloadPdf').disabled = false;
+  });
+
+  // Download TXT com apenas os números
+  document.getElementById('downloadTxt').addEventListener('click', () => {
+    if (lastNumbers.length === 0) return alert('Nenhum dado para exportar.');
+    const text = lastNumbers.join('\n');
+    const blob = new Blob([text], {type: 'text/plain'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'intersecoes_numeros.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // Download PDF com tabela detalhada
+  document.getElementById('downloadPdf').addEventListener('click', () => {
+    if (lastTableData.length === 0) return alert('Nenhum dado para exportar.');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text("Interseções entre Números Figurados", 105, 15, { align: "center" });
+    doc.autoTable({
+      head: [["Combinação", "Número", "Posições nas Sequências"]],
+      body: lastTableData,
+      startY: 25,
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [41, 128, 185] }
+    });
+    doc.save("intersecoes_figurados.pdf");
+  });
+</script>
+</body>
+</html>
